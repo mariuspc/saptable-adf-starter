@@ -1,0 +1,712 @@
+{ 
+    "contentVersion": "1.0.0.0",
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "parameters": {
+        "dataFactoryLocation": {
+            "type": "string",
+            "defaultValue": "UK South",
+            "metadata": {
+                "description": "Location of the data factory."
+            }
+        },
+        "AzureStorage_connectionString": {
+            "type": "securestring",
+            "metadata": {
+                "description": "Connection string for the Azure Storage account."
+            }
+        },
+        "AzureSqlDatabase_connectionString": {
+            "type": "string",
+            "metadata": {
+                "description": "Connnection string for the Azure SQL database."
+            }
+        }
+    },
+    "variables": {
+        "factoryName": "[concat('factory', uniqueString(resourceGroup().id))]",
+        "factoryId": "[concat('Microsoft.DataFactory/factories/', variables('factoryName'))]"
+    },
+    "resources": [
+        {
+            "name": "[variables('factoryName')]",
+            "apiVersion": "2018-06-01",
+            "type": "Microsoft.DataFactory/factories",
+            "location": "[parameters('dataFactoryLocation')]",
+            "properties": {},
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "resources": [
+                {
+                    "name": "[concat(variables('factoryName'), '/BlobStorage')]",
+                    "type": "Microsoft.DataFactory/factories/linkedServices",
+                    "dependsOn": [
+                        "[variables('factoryName')]"
+                    ],
+                    "apiVersion": "2018-06-01",
+                    "properties": {
+                        "type": "AzureBlobStorage",
+                        "description": "Azure Storage linked service",
+                        "typeProperties": {
+                            "connectionString": {
+                                "value": "[parameters('AzureStorage_connectionString')]",
+                                "type": "SecureString"
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "[concat(variables('factoryName'), '/SAP_S4')]",
+                    "type": "Microsoft.DataFactory/factories/linkedServices",
+                    "dependsOn": [
+                        "[variables('factoryName')]"
+                    ],
+                    "apiVersion": "2018-06-01",
+                    "properties": {
+                        "annotations": [],
+                        "type": "SapTable",
+                        "typeProperties": {
+                            "clientId": "",
+                            "language": "EN",
+                            "sncMode": false,
+                            "userName": "",
+                            "password": "",
+                            "server": "",
+                            "systemNumber": ""
+                        }
+                    }
+                },
+                {
+                    "name": "[concat(variables('factoryName'), '/SQLDBMetadata')]",
+                    "type": "Microsoft.DataFactory/factories/linkedServices",
+                    "dependsOn": [
+                        "[variables('factoryName')]"
+                    ],
+                    "apiVersion": "2018-06-01",
+                    "properties": {
+                        "type": "AzureSqlDatabase",
+                        "description": "Azure SQL Database linked service",
+                        "typeProperties": {
+                            "connectionString": {
+                                "value": "[parameters('AzureSqlDatabase_connectionString')]",
+                                "type": "SecureString"
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "[concat(variables('factoryName'), '/SQL_METADATA')]",
+                    "type": "Microsoft.DataFactory/factories/datasets",
+                    "apiVersion": "2018-06-01",
+                    "properties": {
+                        "linkedServiceName": {
+                            "referenceName": "SQLDBMetadata",
+                            "type": "LinkedServiceReference"
+                        },
+                        "annotations": [],
+                        "type": "AzureSqlTable",
+                        "schema": [],
+                        "typeProperties": {}
+                    },
+                    "dependsOn": [
+                        "[concat(variables('factoryId'), '/linkedServices/SQLDBMetadata')]",
+                        "[variables('factoryName')]"
+                    ]
+                },
+                {
+                    "name": "[concat(variables('factoryName'), '/SAP_Table')]",
+                    "type": "Microsoft.DataFactory/factories/datasets",
+                    "apiVersion": "2018-06-01",
+                    "properties": {
+                        "linkedServiceName": {
+                            "referenceName": "SAP_S4",
+                            "type": "LinkedServiceReference"
+                        },
+                        "parameters": {
+                            "tablename": {
+                                "type": "string",
+                                "defaultValue": "VBAK"
+                            }
+                        },
+                        "folder": {
+                            "name": "SAP"
+                        },
+                        "annotations": [],
+                        "type": "SapTableResource",
+                        "schema": [],
+                        "typeProperties": {
+                            "tableName": {
+                                "value": "@dataset().tablename",
+                                "type": "Expression"
+                            }
+                        }
+                    },
+                    "dependsOn": [
+                        "[concat(variables('factoryId'), '/linkedServices/SAP_S4')]",
+                        "[variables('factoryName')]"
+                    ]
+                },
+                {
+                    "name": "[concat(variables('factoryName'), '/PARQUET_TABLE')]",
+                    "type": "Microsoft.DataFactory/factories/datasets",
+                    "apiVersion": "2018-06-01",
+                    "properties": {
+                        "linkedServiceName": {
+                            "referenceName": "BlobStorage",
+                            "type": "LinkedServiceReference"
+                        },
+                        "parameters": {
+                            "dir": {
+                                "type": "string",
+                                "defaultValue": "Ingest"
+                            }
+                        },
+                        "folder": {
+                            "name": "LAKE"
+                        },
+                        "annotations": [],
+                        "type": "Parquet",
+                        "typeProperties": {
+                            "location": {
+                                "type": "AzureBlobStorageLocation",
+                                "folderPath": {
+                                    "value": "@dataset().dir",
+                                    "type": "Expression"
+                                },
+                                "container": "data"
+                            },
+                            "compressionCodec": "snappy"
+                        },
+                        "schema": []
+                    },
+                    "dependsOn": [
+                        "[concat(variables('factoryId'), '/linkedServices/BlobStorage')]",
+                        "[variables('factoryName')]"
+                    ]
+                },
+                {
+                    "name": "[concat(variables('factoryName'), '/Ingest SAP Partition Batch')]",
+                    "type": "Microsoft.DataFactory/factories/pipelines",
+                    "apiVersion": "2018-06-01",
+                    "properties": {
+                        "activities": [
+                            {
+                                "name": "Get SAP table details",
+                                "type": "Lookup",
+                                "dependsOn": [],
+                                "policy": {
+                                    "timeout": "7.00:00:00",
+                                    "retry": 0,
+                                    "retryIntervalInSeconds": 30,
+                                    "secureOutput": false,
+                                    "secureInput": false
+                                },
+                                "userProperties": [],
+                                "typeProperties": {
+                                    "source": {
+                                        "type": "AzureSqlSource",
+                                        "sqlReaderStoredProcedureName": "[[dbo].[sp_get_batch]",
+                                        "storedProcedureParameters": {
+                                            "load_batch": {
+                                                "type": "Int32",
+                                                "value": {
+                                                    "value": "@pipeline().parameters.load_batch",
+                                                    "type": "Expression"
+                                                }
+                                            }
+                                        },
+                                        "queryTimeout": "02:00:00",
+                                        "partitionOption": "None"
+                                    },
+                                    "dataset": {
+                                        "referenceName": "SQL_METADATA",
+                                        "type": "DatasetReference"
+                                    },
+                                    "firstRowOnly": false
+                                }
+                            },
+                            {
+                                "name": "Ingest SAP Tables",
+                                "type": "ForEach",
+                                "dependsOn": [
+                                    {
+                                        "activity": "Get SAP table details",
+                                        "dependencyConditions": [
+                                            "Succeeded"
+                                        ]
+                                    }
+                                ],
+                                "userProperties": [],
+                                "typeProperties": {
+                                    "items": {
+                                        "value": "@activity('Get SAP table details').output.value",
+                                        "type": "Expression"
+                                    },
+                                    "isSequential": false,
+                                    "activities": [
+                                        {
+                                            "name": "Ingest SAP Table",
+                                            "type": "Copy",
+                                            "dependsOn": [
+                                                {
+                                                    "activity": "Log Start",
+                                                    "dependencyConditions": [
+                                                        "Succeeded"
+                                                    ]
+                                                }
+                                            ],
+                                            "policy": {
+                                                "timeout": "7.00:00:00",
+                                                "retry": 0,
+                                                "retryIntervalInSeconds": 30,
+                                                "secureOutput": false,
+                                                "secureInput": false
+                                            },
+                                            "userProperties": [
+                                                {
+                                                    "name": "Source",
+                                                    "value": "@{item().SAP_TABLE_NAME}"
+                                                },
+                                                {
+                                                    "name": "Destination",
+                                                    "value": "data/@{item().filename}/"
+                                                }
+                                            ],
+                                            "typeProperties": {
+                                                "source": {
+                                                    "type": "SapTableSource",
+                                                    "rfcTableOptions": {
+                                                        "value": "@{if(equals(item().LOAD_TYPE,'Incremental')\n\t,concat(\n\t\titem().INCREMENTAL_COLUMN_1\n\t\t, ' LE '''\n\t\t, formatDateTime(adddays(pipeline().TriggerTime,-1),'yyyyMMdd')\n\t\t, ''' AND '\n\t\t, item().INCREMENTAL_COLUMN_1\n\t\t, ' GE '''\n\t\t, item().LOWER_BOUND\n\t\t, ''''\n                , ' OR ' \n                , item().INCREMENTAL_COLUMN_2\n\t\t, ' LE '''\n\t\t, formatDateTime(adddays(pipeline().TriggerTime,-1),'yyyyMMdd')\n\t\t, ''' AND '\n\t\t, item().INCREMENTAL_COLUMN_2\n\t\t, ' GE '''\n\t\t, item().LOWER_BOUND, '''')\n\t,'')}",
+                                                        "type": "Expression"
+                                                    },
+                                                    "customRfcReadTableFunctionModule": "",
+                                                    "rfcTableFields": {
+                                                        "value": "@item().SAP_COLUMNS",
+                                                        "type": "Expression"
+                                                    },
+                                                    "partitionOption": {
+                                                        "value": "@item().PARTITION_OPTION",
+                                                        "type": "Expression"
+                                                    },
+                                                    "partitionSettings": {
+                                                        "partitionColumnName": {
+                                                            "value": "@{item().PARTITION_COLUMN}",
+                                                            "type": "Expression"
+                                                        },
+                                                        "partitionUpperBound": {
+                                                            "value": "@{formatDateTime(adddays(pipeline().TriggerTime,-1),'yyyyMMdd')}",
+                                                            "type": "Expression"
+                                                        },
+                                                        "partitionLowerBound": {
+                                                            "value": "@{item().LOWER_BOUND}",
+                                                            "type": "Expression"
+                                                        },
+                                                        "maxPartitionsNumber": {
+                                                            "value": "@item().PARTITION_NUMBER",
+                                                            "type": "Expression"
+                                                        }
+                                                    }
+                                                },
+                                                "sink": {
+                                                    "type": "ParquetSink",
+                                                    "storeSettings": {
+                                                        "type": "AzureBlobStorageWriteSettings"
+                                                    },
+                                                    "formatSettings": {
+                                                        "type": "ParquetWriteSettings"
+                                                    }
+                                                },
+                                                "enableStaging": false
+                                            },
+                                            "inputs": [
+                                                {
+                                                    "referenceName": "SAP_Table",
+                                                    "type": "DatasetReference",
+                                                    "parameters": {
+                                                        "tablename": {
+                                                            "value": "@item().SAP_TABLE_NAME",
+                                                            "type": "Expression"
+                                                        }
+                                                    }
+                                                }
+                                            ],
+                                            "outputs": [
+                                                {
+                                                    "referenceName": "PARQUET_TABLE",
+                                                    "type": "DatasetReference",
+                                                    "parameters": {
+                                                        "dir": {
+                                                            "value": "@concat('SAP/Ingest/PARQUET/',item().SAP_TABLE_NAME,'/',formatDateTime(pipeline().TriggerTime,'yyyy/MM/dd'))",
+                                                            "type": "Expression"
+                                                        }
+                                                    }
+                                                }
+                                            ]
+                                        },
+                                        {
+                                            "name": "Log Start",
+                                            "type": "SqlServerStoredProcedure",
+                                            "dependsOn": [],
+                                            "policy": {
+                                                "timeout": "7.00:00:00",
+                                                "retry": 0,
+                                                "retryIntervalInSeconds": 30,
+                                                "secureOutput": false,
+                                                "secureInput": false
+                                            },
+                                            "userProperties": [],
+                                            "typeProperties": {
+                                                "storedProcedureName": "[[dbo].[sp_start_load]",
+                                                "storedProcedureParameters": {
+                                                    "pipeline_id": {
+                                                        "value": {
+                                                            "value": "@pipeline().parameters.pipeline_run_id",
+                                                            "type": "Expression"
+                                                        },
+                                                        "type": "String"
+                                                    },
+                                                    "SAP_TABLE_NAME": {
+                                                        "value": {
+                                                            "value": "@item().SAP_TABLE_NAME",
+                                                            "type": "Expression"
+                                                        },
+                                                        "type": "String"
+                                                    },
+                                                    "start_time": {
+                                                        "value": {
+                                                            "value": "@utcnow()",
+                                                            "type": "Expression"
+                                                        },
+                                                        "type": "DateTime"
+                                                    }
+                                                }
+                                            },
+                                            "linkedServiceName": {
+                                                "referenceName": "SQLDBMetadata",
+                                                "type": "LinkedServiceReference"
+                                            }
+                                        },
+                                        {
+                                            "name": "Log End Success",
+                                            "type": "SqlServerStoredProcedure",
+                                            "dependsOn": [
+                                                {
+                                                    "activity": "Ingest SAP Table",
+                                                    "dependencyConditions": [
+                                                        "Succeeded"
+                                                    ]
+                                                }
+                                            ],
+                                            "policy": {
+                                                "timeout": "7.00:00:00",
+                                                "retry": 0,
+                                                "retryIntervalInSeconds": 30,
+                                                "secureOutput": false,
+                                                "secureInput": false
+                                            },
+                                            "userProperties": [],
+                                            "typeProperties": {
+                                                "storedProcedureName": "[[dbo].[sp_end_load]",
+                                                "storedProcedureParameters": {
+                                                    "end_time": {
+                                                        "value": {
+                                                            "value": "@utcnow()",
+                                                            "type": "Expression"
+                                                        },
+                                                        "type": "DateTime"
+                                                    },
+                                                    "pipeline_id": {
+                                                        "value": {
+                                                            "value": "@pipeline().parameters.pipeline_run_id",
+                                                            "type": "Expression"
+                                                        },
+                                                        "type": "String"
+                                                    },
+                                                    "rows": {
+                                                        "value": {
+                                                            "value": "@activity('Ingest SAP Table').output.rowsCopied",
+                                                            "type": "Expression"
+                                                        },
+                                                        "type": "Int32"
+                                                    },
+                                                    "SAP_TABLE_NAME": {
+                                                        "value": {
+                                                            "value": "@item().SAP_TABLE_NAME",
+                                                            "type": "Expression"
+                                                        },
+                                                        "type": "String"
+                                                    },
+                                                    "status": {
+                                                        "value": {
+                                                            "value": "Success",
+                                                            "type": "Expression"
+                                                        },
+                                                        "type": "String"
+                                                    },
+                                                    "duration": {
+                                                        "value": {
+                                                            "value": "@activity('Ingest SAP Table').output.copyDuration",
+                                                            "type": "Expression"
+                                                        },
+                                                        "type": "Int32"
+                                                    },
+                                                    "destination": {
+                                                        "value": {
+                                                            "value": "@{item().filename}",
+                                                            "type": "Expression"
+                                                        },
+                                                        "type": "String"
+                                                    }
+                                                }
+                                            },
+                                            "linkedServiceName": {
+                                                "referenceName": "SQLDBMetadata",
+                                                "type": "LinkedServiceReference"
+                                            }
+                                        },
+                                        {
+                                            "name": "Log End Failed",
+                                            "type": "SqlServerStoredProcedure",
+                                            "dependsOn": [
+                                                {
+                                                    "activity": "Ingest SAP Table",
+                                                    "dependencyConditions": [
+                                                        "Failed"
+                                                    ]
+                                                }
+                                            ],
+                                            "policy": {
+                                                "timeout": "7.00:00:00",
+                                                "retry": 0,
+                                                "retryIntervalInSeconds": 30,
+                                                "secureOutput": false,
+                                                "secureInput": false
+                                            },
+                                            "userProperties": [],
+                                            "typeProperties": {
+                                                "storedProcedureName": "[[dbo].[sp_end_load]",
+                                                "storedProcedureParameters": {
+                                                    "end_time": {
+                                                        "value": {
+                                                            "value": "@utcnow()",
+                                                            "type": "Expression"
+                                                        },
+                                                        "type": "DateTime"
+                                                    },
+                                                    "pipeline_id": {
+                                                        "value": {
+                                                            "value": "@pipeline().parameters.pipeline_run_id",
+                                                            "type": "Expression"
+                                                        },
+                                                        "type": "String"
+                                                    },
+                                                    "rows": {
+                                                        "value": null,
+                                                        "type": "Int32"
+                                                    },
+                                                    "SAP_TABLE_NAME": {
+                                                        "value": {
+                                                            "value": "@item().SAP_TABLE_NAME",
+                                                            "type": "Expression"
+                                                        },
+                                                        "type": "String"
+                                                    },
+                                                    "status": {
+                                                        "value": {
+                                                            "value": "Failed",
+                                                            "type": "Expression"
+                                                        },
+                                                        "type": "String"
+                                                    },
+                                                    "duration": {
+                                                        "value": null,
+                                                        "type": "Int32"
+                                                    },
+                                                    "destination": {
+                                                        "value": {
+                                                            "value": "@{item().filename}",
+                                                            "type": "Expression"
+                                                        },
+                                                        "type": "String"
+                                                    }
+                                                }
+                                            },
+                                            "linkedServiceName": {
+                                                "referenceName": "SQLDBMetadata",
+                                                "type": "LinkedServiceReference"
+                                            }
+                                        }
+                                    ]
+                                }
+                            }
+                        ],
+                        "parameters": {
+                            "pipeline_run_id": {
+                                "type": "string"
+                            },
+                            "load_batch": {
+                                "type": "int"
+                            }
+                        },
+                        "folder": {
+                            "name": "Main"
+                        },
+                        "annotations": []
+                    },
+                    "dependsOn": [
+                        "[concat(variables('factoryId'), '/datasets/SQL_METADATA')]",
+                        "[concat(variables('factoryId'), '/datasets/SAP_Table')]",
+                        "[concat(variables('factoryId'), '/datasets/PARQUET_TABLE')]",
+                        "[concat(variables('factoryId'), '/linkedServices/SQLDBMetadata')]",
+                        "[variables('factoryName')]"
+                    ]
+                },
+                {
+                    "name": "[concat(variables('factoryName'), '/Ingest SAP Master')]",
+                    "type": "Microsoft.DataFactory/factories/pipelines",
+                    "apiVersion": "2018-06-01",
+                    "properties": {
+                        "activities": [
+                            {
+                                "name": "Initiate Load",
+                                "type": "SqlServerStoredProcedure",
+                                "dependsOn": [],
+                                "policy": {
+                                    "timeout": "7.00:00:00",
+                                    "retry": 0,
+                                    "retryIntervalInSeconds": 30,
+                                    "secureOutput": false,
+                                    "secureInput": false
+                                },
+                                "userProperties": [],
+                                "typeProperties": {
+                                    "storedProcedureName": "[[dbo].[sp_initiate_load]",
+                                    "storedProcedureParameters": {
+                                        "note": {
+                                            "value": {
+                                                "value": "@pipeline().parameters.notes",
+                                                "type": "Expression"
+                                            },
+                                            "type": "String"
+                                        },
+                                        "pipeline_id": {
+                                            "value": {
+                                                "value": "@pipeline().RunId",
+                                                "type": "Expression"
+                                            },
+                                            "type": "String"
+                                        },
+                                        "pipeline_name": {
+                                            "value": {
+                                                "value": "@pipeline().Pipeline",
+                                                "type": "Expression"
+                                            },
+                                            "type": "String"
+                                        }
+                                    }
+                                },
+                                "linkedServiceName": {
+                                    "referenceName": "SQLDBMetadata",
+                                    "type": "LinkedServiceReference"
+                                }
+                            },
+                            {
+                                "name": "For Each Batch",
+                                "type": "ForEach",
+                                "dependsOn": [
+                                    {
+                                        "activity": "Get Batches",
+                                        "dependencyConditions": [
+                                            "Succeeded"
+                                        ]
+                                    }
+                                ],
+                                "userProperties": [],
+                                "typeProperties": {
+                                    "items": {
+                                        "value": "@activity('Get Batches').output.value",
+                                        "type": "Expression"
+                                    },
+                                    "isSequential": true,
+                                    "activities": [
+                                        {
+                                            "name": "Ingest SAP Partition Batch",
+                                            "type": "ExecutePipeline",
+                                            "dependsOn": [],
+                                            "userProperties": [],
+                                            "typeProperties": {
+                                                "pipeline": {
+                                                    "referenceName": "Ingest SAP Partition Batch",
+                                                    "type": "PipelineReference"
+                                                },
+                                                "waitOnCompletion": true,
+                                                "parameters": {
+                                                    "pipeline_run_id": {
+                                                        "value": "@pipeline().RunId",
+                                                        "type": "Expression"
+                                                    },
+                                                    "load_batch": {
+                                                        "value": "@item().LOAD_BATCH",
+                                                        "type": "Expression"
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    ]
+                                }
+                            },
+                            {
+                                "name": "Get Batches",
+                                "type": "Lookup",
+                                "dependsOn": [
+                                    {
+                                        "activity": "Initiate Load",
+                                        "dependencyConditions": [
+                                            "Succeeded"
+                                        ]
+                                    }
+                                ],
+                                "policy": {
+                                    "timeout": "7.00:00:00",
+                                    "retry": 0,
+                                    "retryIntervalInSeconds": 30,
+                                    "secureOutput": false,
+                                    "secureInput": false
+                                },
+                                "userProperties": [],
+                                "typeProperties": {
+                                    "source": {
+                                        "type": "AzureSqlSource",
+                                        "sqlReaderQuery": "SELECT DISTINCT [LOAD_BATCH]\n  FROM [dbo].[SAP_TABLES]\n   WHERE LOAD_TABLE = 'Yes'\n ORDER BY [LOAD_BATCH] ",
+                                        "queryTimeout": "02:00:00"
+                                    },
+                                    "dataset": {
+                                        "referenceName": "SQL_METADATA",
+                                        "type": "DatasetReference",
+                                        "parameters": {}
+                                    },
+                                    "firstRowOnly": false
+                                }
+                            }
+                        ],
+                        "parameters": {
+                            "notes": {
+                                "type": "string"
+                            }
+                        },
+                        "folder": {
+                            "name": "Main"
+                        },
+                        "annotations": []
+                    },
+                    "dependsOn": [
+                        "[concat(variables('factoryId'), '/linkedServices/SQLDBMetadata')]",
+                        "[concat(variables('factoryId'), '/datasets/SQL_METADATA')]",
+                        "[concat(variables('factoryId'), '/pipelines/Ingest SAP Partition Batch')]",
+                        "[variables('factoryName')]"
+                    ]
+                }
+            ]
+        }
+    ]
+}

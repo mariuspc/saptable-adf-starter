@@ -1,0 +1,76 @@
+{
+    "contentVersion": "1.0.0.0",
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "parameters": {
+        "databaseAdminUsername": {
+            "type": "string",
+            "metadata": {
+              "description": "Metadata: Username for DB Admin"
+            }
+          },
+          "databaseAdminPassword": {
+            "type": "securestring",
+            "metadata": {
+              "description": "Metadata: Password for DB Admin"
+            }
+          }     
+    },
+    "variables": {
+        "prereqs_link": "https://raw.githubusercontent.com/mariuspc/sap-table-dataFactory/master/prereqs/prereq.azuredeploy.json",
+        "adf_link": "https://raw.githubusercontent.com/mariuspc/sap-table-dataFactory/master/adfdeploy.json"        
+    },
+    "resources": [
+ 
+        {
+            "apiVersion": "2019-10-01",
+            "name": "prereqsTemplate",
+            "type": "Microsoft.Resources/deployments",
+            "properties": {
+                "mode": "Incremental",
+                "templateLink": {
+                    "uri": "[variables('prereqs_link')]",
+                    "contentVersion": "1.0.0.0"
+                },
+                "parameters": {
+                    "databaseAdminUsername": {
+                        "value": "[parameters('databaseAdminUsername')]"
+                    },
+                    "databaseAdminPassword": {
+                        "value": "[parameters('databaseAdminPassword')]"
+                    },
+                    "location": {
+                        "value": "[resourceGroup().location]"
+                    }                                        
+                }
+            }
+        },
+        {
+            "apiVersion": "2019-10-01",
+            "name": "adfTemplate",
+            "type": "Microsoft.Resources/deployments",
+            "properties": {
+                "mode": "Incremental",
+                "templateLink": {
+                    "uri": "[variables('adf_link')]",
+                    "contentVersion": "1.0.0.0"
+                },
+                "parameters": {
+                    "dataFactoryLocation": {
+                        "value": "[resourceGroup().location]"
+                    },
+                    "AzureStorage_connectionString": {
+                        "value": "[reference('prereqsTemplate').outputs.AzureStorage_connectionString.value]"
+                    },                     
+                    "AzureSqlDatabase_connectionString": {
+                        "value": "[reference('prereqsTemplate').outputs.AzureSqlDatabase_connectionString.value]"
+                    }
+                }
+            },
+            "dependsOn": [
+                "prereqsTemplate"
+              ]            
+        }        
+
+    ]
+  }
+  
