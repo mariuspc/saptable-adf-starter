@@ -365,7 +365,7 @@
                                                         },
                                                         "type": "String"
                                                     },
-                                                    "SAP_TABLE_NAME": {
+                                                    "TABLE_NAME": {
                                                         "value": {
                                                             "value": "@item().TABLE_NAME",
                                                             "type": "Expression"
@@ -429,7 +429,7 @@
                                                         },
                                                         "type": "Int32"
                                                     },
-                                                    "SAP_TABLE_NAME": {
+                                                    "TABLE_NAME": {
                                                         "value": {
                                                             "value": "@item().TABLE_NAME",
                                                             "type": "Expression"
@@ -504,7 +504,7 @@
                                                         "value": null,
                                                         "type": "Int32"
                                                     },
-                                                    "SAP_TABLE_NAME": {
+                                                    "TABLE_NAME": {
                                                         "value": {
                                                             "value": "@item().TABLE_NAME",
                                                             "type": "Expression"
