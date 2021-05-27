@@ -265,7 +265,7 @@
                                             "userProperties": [
                                                 {
                                                     "name": "Source",
-                                                    "value": "@{item().SAP_TABLE_NAME}"
+                                                    "value": "@{item().TABLE_NAME}"
                                                 },
                                                 {
                                                     "name": "Destination",
@@ -281,7 +281,7 @@
                                                     },
                                                     "customRfcReadTableFunctionModule": "",
                                                     "rfcTableFields": {
-                                                        "value": "@item().SAP_COLUMNS",
+                                                        "value": "@item().COLUMNS",
                                                         "type": "Expression"
                                                     },
                                                     "partitionOption": {
@@ -324,7 +324,7 @@
                                                     "type": "DatasetReference",
                                                     "parameters": {
                                                         "tablename": {
-                                                            "value": "@item().SAP_TABLE_NAME",
+                                                            "value": "@item().TABLE_NAME",
                                                             "type": "Expression"
                                                         }
                                                     }
@@ -336,7 +336,7 @@
                                                     "type": "DatasetReference",
                                                     "parameters": {
                                                         "dir": {
-                                                            "value": "@concat('SAP/Ingest/PARQUET/',item().SAP_TABLE_NAME,'/',formatDateTime(pipeline().TriggerTime,'yyyy/MM/dd'))",
+                                                            "value": "@concat('SAP/Ingest/PARQUET/',item().TABLE_NAME,'/',formatDateTime(pipeline().TriggerTime,'yyyy/MM/dd'))",
                                                             "type": "Expression"
                                                         }
                                                     }
@@ -367,7 +367,7 @@
                                                     },
                                                     "SAP_TABLE_NAME": {
                                                         "value": {
-                                                            "value": "@item().SAP_TABLE_NAME",
+                                                            "value": "@item().TABLE_NAME",
                                                             "type": "Expression"
                                                         },
                                                         "type": "String"
@@ -431,7 +431,7 @@
                                                     },
                                                     "SAP_TABLE_NAME": {
                                                         "value": {
-                                                            "value": "@item().SAP_TABLE_NAME",
+                                                            "value": "@item().TABLE_NAME",
                                                             "type": "Expression"
                                                         },
                                                         "type": "String"
@@ -506,7 +506,7 @@
                                                     },
                                                     "SAP_TABLE_NAME": {
                                                         "value": {
-                                                            "value": "@item().SAP_TABLE_NAME",
+                                                            "value": "@item().TABLE_NAME",
                                                             "type": "Expression"
                                                         },
                                                         "type": "String"
@@ -677,7 +677,7 @@
                                 "typeProperties": {
                                     "source": {
                                         "type": "AzureSqlSource",
-                                        "sqlReaderQuery": "SELECT DISTINCT [LOAD_BATCH]\n  FROM [dbo].[SAP_TABLES]\n   WHERE LOAD_TABLE = 'Yes'\n ORDER BY [LOAD_BATCH] ",
+                                        "sqlReaderQuery": "SELECT DISTINCT [LOAD_BATCH]\n  FROM [dbo].[TABLES]\n   WHERE LOAD_TABLE = 'Yes'\n ORDER BY [LOAD_BATCH] ",
                                         "queryTimeout": "02:00:00"
                                     },
                                     "dataset": {
