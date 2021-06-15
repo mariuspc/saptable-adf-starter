@@ -21,6 +21,14 @@ This template creates an Azure Data Factory that ingests data from a configurabl
 4. Validate all other linked services and datasets
 5. Check and validate the metadata configuration 
 
+## PowerApp deployment
+1. Only attemp to install the PowerApp after succesfull deployment of the ADF Accelerator. The PowerApp requires a connection to the metadata database and won't work without it.
+2. Download the PowerApp package from the GitHub repository and save on your local computer
+3. Open your PowerApp dashboard and choose Apps from the left-hand menu
+4. Choose Import Package from the top menu
+5. Select the package file
+6. For the database connection choose "Select during import" and define a new SQL connection to the metadata database
+7. Click import to confirm. The PowerApp will be deployed to your environment.
 
 ## TODO
 - Azure Key Vault integration
